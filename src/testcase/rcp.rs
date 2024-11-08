@@ -17,10 +17,10 @@ pub(crate) fn all_tests() -> Vec<TestCase> {
     tests
 }
 
-pub(super) fn rcp_rnd(rnd: Rounding, ftz: bool) -> TestCase {
+pub fn rcp_rnd(rnd: Rounding, ftz: bool) -> TestCase {
     rcp::<false>(rnd, ftz)
 }
-pub(super) fn rcp_approx(ftz: bool) -> TestCase {
+pub fn rcp_approx(ftz: bool) -> TestCase {
     rcp::<true>(Rounding::Default, ftz)
 }
 

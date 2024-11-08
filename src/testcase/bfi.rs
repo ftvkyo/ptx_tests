@@ -8,10 +8,10 @@ use std::mem;
 
 pub static PTX: &str = include_str!("bfi.ptx");
 
-pub(super) fn rng_b32() -> TestCase {
+pub fn rng_b32() -> TestCase {
     bfi_rng::<u32>()
 }
-pub(super) fn rng_b64() -> TestCase {
+pub fn rng_b64() -> TestCase {
     bfi_rng::<u64>()
 }
 

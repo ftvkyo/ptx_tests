@@ -8,7 +8,7 @@ use std::mem;
 
 pub static PTX: &str = include_str!("brev.ptx");
 
-pub(super) fn b32() -> TestCase {
+pub fn b32() -> TestCase {
     brev()
 }
 
