@@ -1,10 +1,12 @@
 #![allow(internal_features)]
 #![feature(link_llvm_intrinsics)]
 #![feature(f16)]
+#![feature(c_size_t)]
 
 use std::ptr;
 
 use bpaf::Bpaf;
+use nvrtc::Nvrtc;
 use regex::{self, Regex};
 
 use cuda::Cuda;
@@ -13,6 +15,7 @@ use testcase::*;
 
 mod common;
 mod cuda;
+mod nvrtc;
 mod test;
 mod testcase;
 
@@ -29,9 +32,9 @@ pub enum Arguments {
         #[bpaf(short, long)]
         filter: Option<String>,
 
-        /// supply tests to the library as inline PTX embedded in CUDA source
+        /// path to NVRTC shared library, switches to testing inline PTX embedded in CUDA sources when provided
         #[bpaf(long)]
-        inline_ptx: bool,
+        nvrtc: Option<String>,
 
         /// path to CUDA shared library under testing, for example C:\Windows\System32\nvcuda.dll or /usr/lib/x86_64-linux-gnu/libcuda.so
         #[bpaf(positional("cuda"))]
@@ -54,17 +57,21 @@ fn run(args: Arguments) -> i32 {
                 println!("{}", test.name);
             }
         }
-        Arguments::Run { filter, cuda, inline_ptx } => {
+        Arguments::Run { filter, nvrtc, cuda } => {
             if let Some(filter) = filter {
                 let re = Regex::new(&filter).unwrap();
                 tests = tests.into_iter().filter(|t| re.is_match(&t.name)).collect();
             }
+
             let cuda = Cuda::new(cuda);
             unsafe { cuda.cuInit(0) }.unwrap();
             let mut ctx = ptr::null_mut();
             unsafe { cuda.cuCtxCreate_v2(&mut ctx, 0, 0) }.unwrap();
+
+            let nvrtc = nvrtc.map(Nvrtc::new);
+
             for t in tests {
-                match (t.test)(&cuda) {
+                match (t.test)(&cuda, &nvrtc) {
                     Ok(()) => println!("{}: OK", t.name),
                     Err(TestError::Mismatch(e)) => {
                         println!(
@@ -82,4 +89,19 @@ fn run(args: Arguments) -> i32 {
         }
     }
     failures
+}
+
+#[macro_export]
+macro_rules! impl_library {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* $(,)* ) -> $ret_type:path);* $(;)*) => {
+        $(
+            #[allow(non_snake_case)]
+            #[allow(improper_ctypes)]
+            pub unsafe fn $fn_name(&self,  $( $arg_id : $arg_type),*) -> $ret_type {
+                let fn_: libloading::Symbol<unsafe extern $abi fn( $($arg_type),*) -> $ret_type> =
+                    self.library.get(concat!(stringify!($fn_name), "\0").as_bytes()).unwrap();
+                fn_( $($arg_id),*)
+            }
+        )*
+    };
 }

@@ -1,4 +1,4 @@
-use crate::cuda::Cuda;
+use crate::{cuda::Cuda, nvrtc::Nvrtc};
 use half::f16;
 use num::{Bounded, Num, PrimInt, Zero};
 use rand::{Rng, SeedableRng};
@@ -9,7 +9,7 @@ pub trait TestCommon {
     type Input: OnDevice;
     type Output: OnDevice;
     fn host_verify(&self, input: Self::Input, output: Self::Output) -> Result<(), Self::Output>;
-    fn ptx(&self) -> String;
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String;
 }
 
 pub trait RangeTest: TestCommon {
@@ -366,9 +366,9 @@ const GROUP_SIZE: usize = 128;
 // Totally unscientific number that works on my machine
 const SAFE_MEMORY_LIMIT: usize = 1 << 29;
 
-pub fn run_random<T: RandomTest>(cuda: &Cuda) -> Result<bool, ResultMismatch> {
+pub fn run_random<T: RandomTest>(cuda: &Cuda, nvrtc: &Option<Nvrtc>) -> Result<bool, ResultMismatch> {
     // TOOD: fix
-    let src = T::ptx(&unsafe { mem::zeroed::<T>() });
+    let src = T::ptx(&unsafe { mem::zeroed::<T>() }, nvrtc);
     let mut module = ptr::null_mut();
     unsafe { cuda.cuModuleLoadData(&mut module, src.as_ptr() as _) }.unwrap();
     let mut kernel = ptr::null_mut();
@@ -470,8 +470,8 @@ fn next_multiple_of(value: usize, multiple: usize) -> usize {
     ((value + multiple - 1) / multiple) * multiple
 }
 
-pub fn run_range<Test: RangeTest>(cuda: &Cuda, t: Test) -> Result<bool, ResultMismatch> {
-    let src = Test::ptx(&t);
+pub fn run_range<Test: RangeTest>(cuda: &Cuda, nvrtc: &Option<Nvrtc>, t: Test) -> Result<bool, ResultMismatch> {
+    let src = Test::ptx(&t, nvrtc);
     let mut module = ptr::null_mut();
     let load_result = unsafe { cuda.cuModuleLoadData(&mut module, src.as_ptr() as _) };
     if t.is_valid() {
@@ -585,15 +585,17 @@ pub fn run_range<Test: RangeTest>(cuda: &Cuda, t: Test) -> Result<bool, ResultMi
     Ok(true)
 }
 
+pub type TestFunction<Ok, Err> = Box<dyn FnOnce(&Cuda, &Option<Nvrtc>) -> Result<Ok, Err>>;
+
 pub struct TestCase {
-    pub test: Box<dyn FnOnce(&Cuda) -> Result<(), TestError>>,
+    pub test: TestFunction<(), TestError>,
     pub name: String,
 }
 
 impl TestCase {
-    pub fn new(name: String, test: Box<dyn FnOnce(&Cuda) -> Result<bool, ResultMismatch>>) -> Self {
+    pub fn new(name: String, test: TestFunction<bool, ResultMismatch>) -> Self {
         let name_copy = name.clone();
-        let test = Box::new(move |cuda: &Cuda| match test(cuda) {
+        let test = Box::new(move |cuda: &Cuda, nvrtc: &Option<Nvrtc>| match test(cuda, nvrtc) {
             Ok(true) => Ok(()),
             Ok(false) => Err(TestError::Miscompile(name_copy)),
             Err(err) => Err(TestError::Mismatch(err)),
@@ -605,12 +607,12 @@ impl TestCase {
         name: String,
         tests: Vec<(
             String,
-            Box<dyn FnOnce(&Cuda) -> Result<bool, ResultMismatch>>,
+            TestFunction<bool, ResultMismatch>,
         )>,
     ) -> Self {
-        let test = Box::new(move |cuda: &Cuda| {
+        let test = Box::new(move |cuda: &Cuda, nvrtc: &Option<Nvrtc>| {
             for (name, test) in tests {
-                match test(cuda) {
+                match test(cuda, nvrtc) {
                     Ok(false) => {}
                     Ok(true) => return Err(TestError::Miscompile(name)),
                     Err(_) => return Err(TestError::Miscompile(name)),

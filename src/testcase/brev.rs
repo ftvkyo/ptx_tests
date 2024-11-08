@@ -1,6 +1,5 @@
 use crate::{
-    cuda::Cuda,
-    test::{self, PtxScalar, TestCase, TestCommon},
+    cuda::Cuda, nvrtc::Nvrtc, test::{self, PtxScalar, TestCase, TestCommon}
 };
 use num::PrimInt;
 use rand::{distributions::Standard, prelude::Distribution};
@@ -17,7 +16,7 @@ where
     Standard: Distribution<u32>,
 {
     let bits = mem::size_of::<u32>() * 8;
-    let test = Box::new(move |cuda: &Cuda| test::run_range::<Brev<u32>>(cuda, Brev::<u32>::new()));
+    let test = Box::new(move |cuda: &Cuda, nvrtc: &Option<Nvrtc>| test::run_range::<Brev<u32>>(cuda, nvrtc, Brev::<u32>::new()));
     TestCase::new(format!("brev_b{}", bits), test)
 }
 
@@ -38,7 +37,11 @@ impl<T: PtxScalar + PrimInt> TestCommon for Brev<T> {
 
     type Output = T;
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
+        if nvrtc.is_some() {
+            unimplemented!("Inline PTX not supported for this test");
+        }
+
         let bits = mem::size_of::<T>() * 8;
         let mut src: String = PTX
             .replace("<TYPE>", format!("b{}", bits).as_str())

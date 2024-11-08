@@ -1,5 +1,6 @@
 use crate::common::{self, flush_to_zero_f32};
 use crate::cuda::Cuda;
+use crate::nvrtc::Nvrtc;
 use crate::test::{self, RangeTest, TestCase, TestCommon};
 use std::mem;
 
@@ -14,7 +15,7 @@ pub(crate) fn all_tests() -> Vec<TestCase> {
 }
 
 fn rsqrt_approx(ftz: bool) -> TestCase {
-    let test = Box::new(move |cuda: &Cuda| test::run_range::<SqrtApprox>(cuda, SqrtApprox { ftz }));
+    let test = Box::new(move |cuda: &Cuda, nvrtc: &Option<Nvrtc>| test::run_range::<SqrtApprox>(cuda, nvrtc, SqrtApprox { ftz }));
     let ftz = if ftz { "_ftz" } else { "" };
     TestCase::new(format!("rsqrt_approx{}", ftz), test)
 }
@@ -30,7 +31,11 @@ impl TestCommon for SqrtApprox {
 
     type Output = f32;
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
+        if nvrtc.is_some() {
+            unimplemented!("Inline PTX not supported for this test");
+        }
+
         let mode = format!("approx{}", if self.ftz { ".ftz" } else { "" });
         let mut src = PTX.replace("<MODE>", &mode);
         src.push('\0');

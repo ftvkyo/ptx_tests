@@ -1,4 +1,5 @@
 use crate::cuda::Cuda;
+use crate::nvrtc::Nvrtc;
 use crate::test::{self, PtxScalar, RandomTest, RangeTest, TestCase, TestCommon};
 use num::cast::AsPrimitive;
 use num::PrimInt;
@@ -26,7 +27,7 @@ fn bfe_rng<T: PtxScalar + AsPrimitive<usize> + PrimInt>() -> TestCase
 where
     Standard: Distribution<T>,
 {
-    let test = Box::new(move |cuda: &Cuda| test::run_random::<Bfe<T>>(cuda));
+    let test = Box::new(move |cuda: &Cuda, nvrtc: &Option<Nvrtc>| test::run_random::<Bfe<T>>(cuda, nvrtc));
     TestCase::new(format!("bfe_rng_{}", T::name()), test)
 }
 
@@ -39,7 +40,11 @@ impl<T: PtxScalar + AsPrimitive<usize> + PrimInt> TestCommon for Bfe<T> {
 
     type Output = T;
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
+        if nvrtc.is_some() {
+            unimplemented!("Inline PTX not supported for this test");
+        }
+
         let mut src = PTX
             .replace("<TYPE>", T::name())
             .replace("<TYPE_SIZE>", &mem::size_of::<T>().to_string());

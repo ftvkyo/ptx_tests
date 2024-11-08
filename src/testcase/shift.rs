@@ -1,4 +1,4 @@
-use crate::test::{self, PtxScalar, RangeTest, TestCase, TestCommon};
+use crate::{nvrtc::Nvrtc, test::{self, PtxScalar, RangeTest, TestCase, TestCommon}};
 use num::PrimInt;
 use std::mem;
 
@@ -8,13 +8,14 @@ pub(crate) fn all_tests() -> Vec<TestCase> {
     vec![
         TestCase::new(
             "shl_b16".to_string(),
-            Box::new(|cuda| test::run_range::<Shl>(cuda, Shl {})),
+            Box::new(|cuda, nvrtc| test::run_range::<Shl>(cuda, nvrtc, Shl {})),
         ),
         TestCase::new(
             "shr_u16".to_string(),
-            Box::new(|cuda| {
+            Box::new(|cuda, nvrtc| {
                 test::run_range::<Shr<u16>>(
                     cuda,
+                    nvrtc,
                     Shr {
                         _phantom: std::marker::PhantomData,
                     },
@@ -23,9 +24,10 @@ pub(crate) fn all_tests() -> Vec<TestCase> {
         ),
         TestCase::new(
             "shr_s16".to_string(),
-            Box::new(|cuda| {
+            Box::new(|cuda, nvrtc| {
                 test::run_range::<Shr<i16>>(
                     cuda,
+                    nvrtc,
                     Shr {
                         _phantom: std::marker::PhantomData,
                     },
@@ -51,7 +53,11 @@ impl TestCommon for Shl {
         }
     }
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
+        if nvrtc.is_some() {
+            unimplemented!("Inline PTX not supported for this test");
+        }
+
         let mut src = PTX.replace("<OP>", "shl.b16");
         src.push('\0');
         src
@@ -92,7 +98,11 @@ impl<T: PtxScalar + PrimInt> TestCommon for Shr<T> {
         }
     }
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
+        if nvrtc.is_some() {
+            unimplemented!("Inline PTX not supported for this test");
+        }
+
         let op = if T::signed() { "shr.s16" } else { "shr.u16" };
         let mut src = PTX.replace("<OP>", op);
         src.push('\0');

@@ -1,10 +1,11 @@
 use crate::{
-    cuda::Cuda,
-    test::{self, PtxScalar, RandomTest, TestCase, TestCommon},
+    cuda::Cuda, nvrtc::Nvrtc, test::{self, PtxScalar, RandomTest, TestCase, TestCommon}
 };
 use num::{cast::AsPrimitive, PrimInt};
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 use std::mem;
+
+use super::prepare_test_module;
 
 pub static PTX: &str = include_str!("bfi.ptx");
 
@@ -20,7 +21,7 @@ where
     Standard: Distribution<T>,
 {
     let bits = mem::size_of::<T>() * 8;
-    let test = Box::new(move |cuda: &Cuda| test::run_random::<Bfi<T>>(cuda));
+    let test = Box::new(move |cuda: &Cuda, nvrtc: &Option<Nvrtc>| test::run_random::<Bfi<T>>(cuda, nvrtc));
     TestCase::new(format!("bfi_rng_b{}", bits), test)
 }
 
@@ -33,13 +34,23 @@ impl<T: PtxScalar + PrimInt + AsPrimitive<usize>> TestCommon for Bfi<T> {
 
     type Output = T;
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
         let bits = mem::size_of::<T>() * 8;
-        let mut src = PTX
+        let src = PTX
             .replace("<TYPE>", format!("b{}", bits).as_str())
             .replace("<TYPE_SIZE>", &mem::size_of::<T>().to_string());
-        src.push('\0');
-        src
+
+        prepare_test_module(
+            &[
+                "input_a",
+                "input_b",
+                "positions",
+                "lengths",
+                "output",
+            ],
+            &src,
+            nvrtc,
+        )
     }
 
     fn host_verify(&self, input: Self::Input, output: Self::Output) -> Result<(), Self::Output> {

@@ -1,6 +1,5 @@
 use crate::{
-    common,
-    test::{self, RangeTest, TestCase, TestCommon},
+    common, nvrtc::Nvrtc, test::{self, RangeTest, TestCase, TestCommon}
 };
 use std::mem;
 
@@ -25,7 +24,7 @@ fn min(ftz: bool, nan: bool) -> TestCase {
     );
     TestCase::new(
         name.to_string(),
-        Box::new(move |cuda| test::run_range::<Min>(cuda, Min { ftz, nan })),
+        Box::new(move |cuda, nvrtc| test::run_range::<Min>(cuda, nvrtc, Min { ftz, nan })),
     )
 }
 
@@ -37,7 +36,7 @@ fn max(ftz: bool, nan: bool) -> TestCase {
     );
     TestCase::new(
         name.to_string(),
-        Box::new(move |cuda| test::run_range::<Max>(cuda, Max { ftz, nan })),
+        Box::new(move |cuda, nvrtc| test::run_range::<Max>(cuda, nvrtc, Max { ftz, nan })),
     )
 }
 
@@ -62,7 +61,11 @@ impl TestCommon for Min {
         }
     }
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
+        if nvrtc.is_some() {
+            unimplemented!("Inline PTX not supported for this test");
+        }
+
         let name = format!(
             "min{}{}.f16",
             if self.ftz { ".ftz" } else { "" },
@@ -105,7 +108,11 @@ impl TestCommon for Max {
         }
     }
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
+        if nvrtc.is_some() {
+            unimplemented!("Inline PTX not supported for this test");
+        }
+
         let name = format!(
             "max{}{}.f16",
             if self.ftz { ".ftz" } else { "" },

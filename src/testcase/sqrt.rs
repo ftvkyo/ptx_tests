@@ -1,5 +1,6 @@
 use crate::common::{self, flush_to_zero_f32, Rounding};
 use crate::cuda::Cuda;
+use crate::nvrtc::Nvrtc;
 use crate::test::{self, RangeTest, TestCase, TestCommon};
 use std::mem;
 
@@ -28,7 +29,7 @@ pub fn sqrt_approx(ftz: bool) -> TestCase {
 
 fn sqrt<const APPROX: bool>(rnd: Rounding, ftz: bool) -> TestCase {
     let test =
-        Box::new(move |cuda: &Cuda| test::run_range::<Sqrt<APPROX>>(cuda, Sqrt { rnd, ftz }));
+        Box::new(move |cuda: &Cuda, nvrtc: &Option<Nvrtc>| test::run_range::<Sqrt<APPROX>>(cuda, nvrtc, Sqrt { rnd, ftz }));
     let mode = if APPROX { "approx" } else { rnd.as_str() };
     let ftz = if ftz { "_ftz" } else { "" };
     TestCase::new(format!("sqrt_{}{}", mode, ftz), test)
@@ -46,7 +47,11 @@ impl<const APPROX: bool> TestCommon for Sqrt<APPROX> {
 
     type Output = f32;
 
-    fn ptx(&self) -> String {
+    fn ptx(&self, nvrtc: &Option<Nvrtc>) -> String {
+        if nvrtc.is_some() {
+            unimplemented!("Inline PTX not supported for this test");
+        }
+
         let rnd = if APPROX { "approx" } else { self.rnd.as_str() };
         let mode = format!("{}{}", rnd, if self.ftz { ".ftz" } else { "" });
         let mut src = PTX.replace("<MODE>", &mode);
