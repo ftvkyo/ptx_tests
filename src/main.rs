@@ -37,6 +37,10 @@ pub enum Arguments {
         #[bpaf(short, long)]
         filter: Option<String>,
 
+        /// supply tests to the library as inline PTX embedded in CUDA source
+        #[bpaf(long)]
+        inline_ptx: bool,
+
         /// path to CUDA shared library under testing, for example C:\Windows\System32\nvcuda.dll or /usr/lib/x86_64-linux-gnu/libcuda.so
         #[bpaf(positional("cuda"))]
         cuda: String,
@@ -80,7 +84,7 @@ fn run(args: Arguments) -> i32 {
                 println!("{}", test.name);
             }
         }
-        Arguments::Run { filter, cuda } => {
+        Arguments::Run { filter, cuda, inline_ptx } => {
             if let Some(filter) = filter {
                 let re = Regex::new(&filter).unwrap();
                 tests = tests.into_iter().filter(|t| re.is_match(&t.name)).collect();
