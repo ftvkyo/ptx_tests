@@ -19,10 +19,10 @@ pub(crate) fn all_tests() -> Vec<TestCase> {
     tests
 }
 
-pub(super) fn sqrt_rnd(rnd: Rounding, ftz: bool) -> TestCase {
+pub fn sqrt_rnd(rnd: Rounding, ftz: bool) -> TestCase {
     sqrt::<false>(rnd, ftz)
 }
-pub(super) fn sqrt_approx(ftz: bool) -> TestCase {
+pub fn sqrt_approx(ftz: bool) -> TestCase {
     sqrt::<true>(Rounding::Default, ftz)
 }
 
