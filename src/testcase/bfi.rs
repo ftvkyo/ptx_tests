@@ -12,7 +12,7 @@ pub fn rng_b64() -> TestCase {
     bfi_rng::<u64>()
 }
 
-fn bfi_rng<T: PtxScalar + PrimInt + AsPrimitive<usize>>() -> TestCase
+fn bfi_rng<T: PtxScalar + PrimInt + AsPrimitive<usize> + Default>() -> TestCase
 where
     Standard: Distribution<T>,
 {
@@ -21,6 +21,7 @@ where
     TestCase::new(format!("bfi_rng_b{}", bits), test)
 }
 
+#[derive(Default)]
 pub struct Bfi<T: PtxScalar> {
     _phantom: std::marker::PhantomData<T>,
 }
@@ -78,7 +79,7 @@ impl<T: PtxScalar + PrimInt + AsPrimitive<usize>> TestCommon for Bfi<T> {
     }
 }
 
-impl<T: PtxScalar + PrimInt + AsPrimitive<usize>> RandomTest for Bfi<T>
+impl<T: PtxScalar + PrimInt + AsPrimitive<usize> + Default> RandomTest for Bfi<T>
 where
     Standard: Distribution<T>,
 {
