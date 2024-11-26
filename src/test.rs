@@ -1,14 +1,16 @@
-use crate::cuda::Cuda;
 use half::f16;
 use num::{Bounded, Num, PrimInt, Zero};
 use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::{any::Any, fmt::Debug, mem, ptr, u32};
 
+use crate::TestContext;
+
 pub trait TestCommon {
     type Input: OnDevice;
     type Output: OnDevice;
     fn host_verify(&self, input: Self::Input, output: Self::Output) -> Result<(), Self::Output>;
+
     fn ptx(&self) -> String;
 }
 
@@ -366,17 +368,17 @@ const GROUP_SIZE: usize = 128;
 // Totally unscientific number that works on my machine
 const SAFE_MEMORY_LIMIT: usize = 1 << 29;
 
-pub fn run_random<T: RandomTest>(cuda: &Cuda) -> Result<bool, ResultMismatch> {
-    // TOOD: fix
-    let src = T::ptx(&unsafe { mem::zeroed::<T>() });
+pub fn run_random<T: RandomTest>(ctx: &TestContext) -> Result<bool, ResultMismatch> {
+    // TODO: fix (require Default on RandomTest)
+    let src = ctx.prepare_test_source(&unsafe { mem::zeroed::<T>() });
     let mut module = ptr::null_mut();
-    unsafe { cuda.cuModuleLoadData(&mut module, src.as_ptr() as _) }.unwrap();
+    unsafe { ctx.cuda.cuModuleLoadData(&mut module, src.as_ptr() as _) }.unwrap();
     let mut kernel = ptr::null_mut();
-    unsafe { cuda.cuModuleGetFunction(&mut kernel, module, c"run".as_ptr()) }.unwrap();
+    unsafe { ctx.cuda.cuModuleGetFunction(&mut kernel, module, c"run".as_ptr()) }.unwrap();
     let mut rng = XorShiftRng::seed_from_u64(SEED);
     let mut free_memory = 0;
     let mut total_memory = 0;
-    unsafe { cuda.cuMemGetInfo_v2(&mut free_memory, &mut total_memory) }.unwrap();
+    unsafe { ctx.cuda.cuMemGetInfo_v2(&mut free_memory, &mut total_memory) }.unwrap();
     let max_memory = (total_memory / 2).min(SAFE_MEMORY_LIMIT);
     let total_elements = 2.pow(32);
     assert!(total_elements % GROUP_SIZE == 0);
@@ -406,14 +408,14 @@ pub fn run_random<T: RandomTest>(cuda: &Cuda) -> Result<bool, ResultMismatch> {
             .iter()
             .map(|vec| {
                 let mut devptr = 0;
-                unsafe { cuda.cuMemAlloc_v2(&mut devptr, vec.len()) }.unwrap();
-                unsafe { cuda.cuMemcpyHtoD_v2(devptr, vec.as_ptr().cast_mut().cast(), vec.len()) }
+                unsafe { ctx.cuda.cuMemAlloc_v2(&mut devptr, vec.len()) }.unwrap();
+                unsafe { ctx.cuda.cuMemcpyHtoD_v2(devptr, vec.as_ptr().cast_mut().cast(), vec.len()) }
                     .unwrap();
                 devptr
             })
             .collect();
         let mut dev_output = 0;
-        unsafe { cuda.cuMemAlloc_v2(&mut dev_output, element_batch_size * T::Output::size_of()) }
+        unsafe { ctx.cuda.cuMemAlloc_v2(&mut dev_output, element_batch_size * T::Output::size_of()) }
             .unwrap();
         let mut args = dev_inputs
             .iter()
@@ -421,7 +423,7 @@ pub fn run_random<T: RandomTest>(cuda: &Cuda) -> Result<bool, ResultMismatch> {
             .collect::<Vec<_>>();
         args.push(&dev_output);
         unsafe {
-            cuda.cuLaunchKernel(
+            ctx.cuda.cuLaunchKernel(
                 kernel,
                 (element_batch_size / GROUP_SIZE) as u32,
                 1,
@@ -436,9 +438,9 @@ pub fn run_random<T: RandomTest>(cuda: &Cuda) -> Result<bool, ResultMismatch> {
             )
         }
         .unwrap();
-        unsafe { cuda.cuStreamSynchronize(0 as _) }.unwrap();
+        unsafe { ctx.cuda.cuStreamSynchronize(0 as _) }.unwrap();
         unsafe {
-            cuda.cuMemcpyDtoH_v2(
+            ctx.cuda.cuMemcpyDtoH_v2(
                 result.as_mut_ptr() as _,
                 dev_output,
                 result.len() * T::Output::size_of(),
@@ -458,11 +460,11 @@ pub fn run_random<T: RandomTest>(cuda: &Cuda) -> Result<bool, ResultMismatch> {
             }
         }
         for devptr in dev_inputs {
-            unsafe { cuda.cuMemFree_v2(devptr) }.unwrap();
+            unsafe { ctx.cuda.cuMemFree_v2(devptr) }.unwrap();
         }
-        unsafe { cuda.cuMemFree_v2(dev_output) }.unwrap();
+        unsafe { ctx.cuda.cuMemFree_v2(dev_output) }.unwrap();
     }
-    unsafe { cuda.cuModuleUnload(module) }.unwrap();
+    unsafe { ctx.cuda.cuModuleUnload(module) }.unwrap();
     Ok(true)
 }
 
@@ -470,10 +472,10 @@ fn next_multiple_of(value: usize, multiple: usize) -> usize {
     ((value + multiple - 1) / multiple) * multiple
 }
 
-pub fn run_range<Test: RangeTest>(cuda: &Cuda, t: Test) -> Result<bool, ResultMismatch> {
-    let src = Test::ptx(&t);
+pub fn run_range<Test: RangeTest>(ctx: &TestContext, t: Test) -> Result<bool, ResultMismatch> {
+    let src = ctx.prepare_test_source(&t);
     let mut module = ptr::null_mut();
-    let load_result = unsafe { cuda.cuModuleLoadData(&mut module, src.as_ptr() as _) };
+    let load_result = unsafe { ctx.cuda.cuModuleLoadData(&mut module, src.as_ptr() as _) };
     if t.is_valid() {
         load_result.unwrap();
     } else {
@@ -481,10 +483,10 @@ pub fn run_range<Test: RangeTest>(cuda: &Cuda, t: Test) -> Result<bool, ResultMi
         return Ok(false);
     }
     let mut kernel = ptr::null_mut();
-    unsafe { cuda.cuModuleGetFunction(&mut kernel, module, c"run".as_ptr()) }.unwrap();
+    unsafe { ctx.cuda.cuModuleGetFunction(&mut kernel, module, c"run".as_ptr()) }.unwrap();
     let mut free_memory = 0;
     let mut total_memory = 0;
-    unsafe { cuda.cuMemGetInfo_v2(&mut free_memory, &mut total_memory) }.unwrap();
+    unsafe { ctx.cuda.cuMemGetInfo_v2(&mut free_memory, &mut total_memory) }.unwrap();
     let max_memory = (total_memory / 2).min(SAFE_MEMORY_LIMIT);
     let total_elements = Test::MAX_VALUE as usize + 1;
     if total_elements % GROUP_SIZE != 0 {
@@ -521,15 +523,15 @@ pub fn run_range<Test: RangeTest>(cuda: &Cuda, t: Test) -> Result<bool, ResultMi
             .iter()
             .map(|vec| {
                 let mut devptr = 0;
-                unsafe { cuda.cuMemAlloc_v2(&mut devptr, vec.len()) }.unwrap();
-                unsafe { cuda.cuMemcpyHtoD_v2(devptr, vec.as_ptr().cast_mut().cast(), vec.len()) }
+                unsafe { ctx.cuda.cuMemAlloc_v2(&mut devptr, vec.len()) }.unwrap();
+                unsafe { ctx.cuda.cuMemcpyHtoD_v2(devptr, vec.as_ptr().cast_mut().cast(), vec.len()) }
                     .unwrap();
                 devptr
             })
             .collect();
         let mut dev_output = 0;
         unsafe {
-            cuda.cuMemAlloc_v2(
+            ctx.cuda.cuMemAlloc_v2(
                 &mut dev_output,
                 element_batch_size * Test::Output::size_of(),
             )
@@ -541,7 +543,7 @@ pub fn run_range<Test: RangeTest>(cuda: &Cuda, t: Test) -> Result<bool, ResultMi
             .collect::<Vec<_>>();
         args.push(&dev_output);
         unsafe {
-            cuda.cuLaunchKernel(
+            ctx.cuda.cuLaunchKernel(
                 kernel,
                 (element_batch_size / GROUP_SIZE) as u32,
                 1,
@@ -556,9 +558,9 @@ pub fn run_range<Test: RangeTest>(cuda: &Cuda, t: Test) -> Result<bool, ResultMi
             )
         }
         .unwrap();
-        unsafe { cuda.cuStreamSynchronize(0 as _) }.unwrap();
+        unsafe { ctx.cuda.cuStreamSynchronize(0 as _) }.unwrap();
         unsafe {
-            cuda.cuMemcpyDtoH_v2(
+            ctx.cuda.cuMemcpyDtoH_v2(
                 result.as_mut_ptr() as _,
                 dev_output,
                 result.len() * Test::Output::size_of(),
@@ -577,23 +579,33 @@ pub fn run_range<Test: RangeTest>(cuda: &Cuda, t: Test) -> Result<bool, ResultMi
             }
         }
         for devptr in dev_inputs {
-            unsafe { cuda.cuMemFree_v2(devptr) }.unwrap();
+            unsafe { ctx.cuda.cuMemFree_v2(devptr) }.unwrap();
         }
-        unsafe { cuda.cuMemFree_v2(dev_output) }.unwrap();
+        unsafe { ctx.cuda.cuMemFree_v2(dev_output) }.unwrap();
     }
-    unsafe { cuda.cuModuleUnload(module) }.unwrap();
+    unsafe { ctx.cuda.cuModuleUnload(module) }.unwrap();
     Ok(true)
 }
 
+pub type TestFunction<Ok, Err> = Box<dyn FnOnce(&TestContext) -> Result<Ok, Err>>;
+
+pub fn make_random<T: RandomTest>() -> TestFunction<bool, ResultMismatch> {
+    return Box::new(|ctx| run_random::<T>(ctx));
+}
+
+pub fn make_range<T: RangeTest + 'static>(t: T) -> TestFunction<bool, ResultMismatch> {
+    return Box::new(move |ctx| run_range::<T>(ctx, t));
+}
+
 pub struct TestCase {
-    pub test: Box<dyn FnOnce(&Cuda) -> Result<(), TestError>>,
+    pub test: TestFunction<(), TestError>,
     pub name: String,
 }
 
 impl TestCase {
-    pub fn new(name: String, test: Box<dyn FnOnce(&Cuda) -> Result<bool, ResultMismatch>>) -> Self {
+    pub fn new(name: String, test: TestFunction<bool, ResultMismatch>) -> Self {
         let name_copy = name.clone();
-        let test = Box::new(move |cuda: &Cuda| match test(cuda) {
+        let test = Box::new(move |ctx: &TestContext| match test(ctx) {
             Ok(true) => Ok(()),
             Ok(false) => Err(TestError::Miscompile(name_copy)),
             Err(err) => Err(TestError::Mismatch(err)),
@@ -605,12 +617,12 @@ impl TestCase {
         name: String,
         tests: Vec<(
             String,
-            Box<dyn FnOnce(&Cuda) -> Result<bool, ResultMismatch>>,
+            TestFunction<bool, ResultMismatch>,
         )>,
     ) -> Self {
-        let test = Box::new(move |cuda: &Cuda| {
+        let test = Box::new(move |ctx: &TestContext| {
             for (name, test) in tests {
-                match test(cuda) {
+                match test(ctx) {
                     Ok(false) => {}
                     Ok(true) => return Err(TestError::Miscompile(name)),
                     Err(_) => return Err(TestError::Miscompile(name)),

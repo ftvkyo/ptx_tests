@@ -1,7 +1,4 @@
-use crate::{
-    common,
-    test::{self, RangeTest, TestCase, TestCommon},
-};
+use crate::{common, test::{make_range, RangeTest, TestCase, TestCommon}};
 use std::mem;
 
 pub static PTX: &str = include_str!("minmax.ptx");
@@ -25,7 +22,7 @@ fn min(ftz: bool, nan: bool) -> TestCase {
     );
     TestCase::new(
         name.to_string(),
-        Box::new(move |cuda| test::run_range::<Min>(cuda, Min { ftz, nan })),
+        make_range(Min { ftz, nan }),
     )
 }
 
@@ -37,7 +34,7 @@ fn max(ftz: bool, nan: bool) -> TestCase {
     );
     TestCase::new(
         name.to_string(),
-        Box::new(move |cuda| test::run_range::<Max>(cuda, Max { ftz, nan })),
+        make_range(Max { ftz, nan }),
     )
 }
 

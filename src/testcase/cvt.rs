@@ -1,7 +1,7 @@
 use crate::common::{llvm_get_rounding, llvm_set_rounding};
+use crate::test::{make_range, TestFunction};
 use crate::{
     common::Rounding,
-    cuda::Cuda,
     test::{self, PtxScalar, ResultMismatch, TestCase, TestCommon},
 };
 use num::traits::AsPrimitive;
@@ -199,7 +199,7 @@ fn test_case<To: PtxScalar, From: PtxScalar + HostConvert<To>>(
     sat: bool,
 ) -> (
     String,
-    Box<dyn FnOnce(&Cuda) -> Result<bool, ResultMismatch>>,
+    TestFunction<bool, ResultMismatch>,
 ) {
     let rnd_txt = match rnd {
         Rounding::Default => "",
@@ -219,9 +219,7 @@ fn test_case<To: PtxScalar, From: PtxScalar + HostConvert<To>>(
         To::name(),
         From::name()
     );
-    let test = Box::new(move |cuda: &Cuda| {
-        test::run_range::<Cvt<To, From>>(cuda, Cvt::<To, From>::new(rnd, ftz, sat))
-    });
+    let test = make_range(Cvt::<To, From>::new(rnd, ftz, sat));
     (name, test)
 }
 

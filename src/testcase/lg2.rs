@@ -1,8 +1,7 @@
 use rug::Float;
 
 use crate::common::{self, flush_to_zero_f32};
-use crate::cuda::Cuda;
-use crate::test::{self, RangeTest, TestCase, TestCommon};
+use crate::test::{make_range, RangeTest, TestCase, TestCommon};
 use core::f32;
 use std::mem;
 
@@ -20,7 +19,7 @@ pub(crate) fn all_tests() -> Vec<TestCase> {
 fn lg2(ftz: bool) -> TestCase {
     let mut tolerance = Float::with_val(PRECISION, -22.6f64);
     tolerance.exp2_mut();
-    let test = Box::new(move |cuda: &Cuda| test::run_range::<Lg2>(cuda, Lg2 { ftz, tolerance }));
+    let test = make_range(Lg2 { ftz, tolerance });
     let ftz = if ftz { "_ftz" } else { "" };
     TestCase::new(format!("lg2_approx{}", ftz), test)
 }

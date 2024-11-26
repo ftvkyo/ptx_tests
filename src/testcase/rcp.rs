@@ -1,6 +1,5 @@
 use crate::common::{flush_to_zero_f32, Rounding};
-use crate::cuda::Cuda;
-use crate::test::{self, RangeTest, TestCase, TestCommon};
+use crate::test::{make_range, RangeTest, TestCase, TestCommon};
 use std::mem;
 
 pub static PTX: &str = include_str!("rcp.ptx");
@@ -25,7 +24,7 @@ pub fn rcp_approx(ftz: bool) -> TestCase {
 }
 
 fn rcp<const APPROX: bool>(rnd: Rounding, ftz: bool) -> TestCase {
-    let test = Box::new(move |cuda: &Cuda| test::run_range::<Rcp<APPROX>>(cuda, Rcp { rnd, ftz }));
+    let test = make_range::<Rcp<APPROX>>(Rcp { rnd, ftz });
     let mode = if APPROX { "approx" } else { rnd.as_str() };
     let ftz = if ftz { "_ftz" } else { "" };
     TestCase::new(format!("rcp_{}{}", mode, ftz), test)

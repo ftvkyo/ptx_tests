@@ -1,7 +1,4 @@
-use crate::{
-    cuda::Cuda,
-    test::{self, PtxScalar, TestCase, TestCommon},
-};
+use crate::test::{self, make_range, PtxScalar, TestCase, TestCommon};
 use num::PrimInt;
 use rand::{distributions::Standard, prelude::Distribution};
 use std::mem;
@@ -17,7 +14,7 @@ where
     Standard: Distribution<u32>,
 {
     let bits = mem::size_of::<u32>() * 8;
-    let test = Box::new(move |cuda: &Cuda| test::run_range::<Brev<u32>>(cuda, Brev::<u32>::new()));
+    let test = make_range(Brev::<u32>::new());
     TestCase::new(format!("brev_b{}", bits), test)
 }
 

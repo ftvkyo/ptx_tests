@@ -1,7 +1,4 @@
-use crate::{
-    cuda::Cuda,
-    test::{self, PtxScalar, RandomTest, TestCase, TestCommon},
-};
+use crate::test::{make_random, PtxScalar, RandomTest, TestCase, TestCommon};
 use num::{cast::AsPrimitive, PrimInt};
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 use std::mem;
@@ -20,7 +17,7 @@ where
     Standard: Distribution<T>,
 {
     let bits = mem::size_of::<T>() * 8;
-    let test = Box::new(move |cuda: &Cuda| test::run_random::<Bfi<T>>(cuda));
+    let test = make_random::<Bfi<T>>();
     TestCase::new(format!("bfi_rng_b{}", bits), test)
 }
 

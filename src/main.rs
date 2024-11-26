@@ -57,12 +57,17 @@ fn run(args: Arguments) -> i32 {
                 let re = Regex::new(&filter).unwrap();
                 tests = tests.into_iter().filter(|t| re.is_match(&t.name)).collect();
             }
-            let cuda = Cuda::new(cuda);
-            unsafe { cuda.cuInit(0) }.unwrap();
-            let mut ctx = ptr::null_mut();
-            unsafe { cuda.cuCtxCreate_v2(&mut ctx, 0, 0) }.unwrap();
+
+            let ctx = TestContext {
+                cuda: Cuda::new(cuda),
+            };
+
+            unsafe { ctx.cuda.cuInit(0) }.unwrap();
+            let mut cuda_ctx = ptr::null_mut();
+            unsafe { ctx.cuda.cuCtxCreate_v2(&mut cuda_ctx, 0, 0) }.unwrap();
+
             for t in tests {
-                match (t.test)(&cuda) {
+                match (t.test)(&ctx) {
                     Ok(()) => println!("{}: OK", t.name),
                     Err(TestError::Mismatch(e)) => {
                         println!(

@@ -1,4 +1,4 @@
-use crate::test::{self, PtxScalar, RangeTest, TestCase, TestCommon};
+use crate::test::{make_range, PtxScalar, RangeTest, TestCase, TestCommon};
 use num::PrimInt;
 use std::mem;
 
@@ -8,29 +8,15 @@ pub(crate) fn all_tests() -> Vec<TestCase> {
     vec![
         TestCase::new(
             "shl_b16".to_string(),
-            Box::new(|cuda| test::run_range::<Shl>(cuda, Shl {})),
+            make_range(Shl {}),
         ),
         TestCase::new(
             "shr_u16".to_string(),
-            Box::new(|cuda| {
-                test::run_range::<Shr<u16>>(
-                    cuda,
-                    Shr {
-                        _phantom: std::marker::PhantomData,
-                    },
-                )
-            }),
+            make_range::<Shr<u16>>(Shr { _phantom: std::marker::PhantomData }),
         ),
         TestCase::new(
             "shr_s16".to_string(),
-            Box::new(|cuda| {
-                test::run_range::<Shr<i16>>(
-                    cuda,
-                    Shr {
-                        _phantom: std::marker::PhantomData,
-                    },
-                )
-            }),
+            make_range::<Shr<i16>>(Shr { _phantom: std::marker::PhantomData }),
         ),
     ]
 }

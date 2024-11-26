@@ -1,4 +1,4 @@
-use crate::test::TestCase;
+use crate::{cuda::Cuda, test::{TestCase, TestCommon}};
 
 mod bfe;
 mod bfi;
@@ -12,6 +12,18 @@ mod rsqrt;
 mod shift;
 mod sin;
 mod sqrt;
+
+pub struct TestContext {
+    pub cuda: Cuda,
+}
+
+impl TestContext {
+    /// Prepare test sources to be loaded as a module on the device.
+    pub fn prepare_test_source<T: TestCommon>(&self, t: &T) -> String {
+        let body = t.ptx();
+        return body;
+    }
+}
 
 pub fn tests() -> Vec<TestCase> {
     let mut tests = vec![

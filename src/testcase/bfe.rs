@@ -1,5 +1,4 @@
-use crate::cuda::Cuda;
-use crate::test::{self, PtxScalar, RandomTest, RangeTest, TestCase, TestCommon};
+use crate::test::{make_random, PtxScalar, RandomTest, RangeTest, TestCase, TestCommon};
 use num::cast::AsPrimitive;
 use num::PrimInt;
 use num::{traits::FromBytes, Zero};
@@ -26,7 +25,7 @@ fn bfe_rng<T: PtxScalar + AsPrimitive<usize> + PrimInt>() -> TestCase
 where
     Standard: Distribution<T>,
 {
-    let test = Box::new(move |cuda: &Cuda| test::run_random::<Bfe<T>>(cuda));
+    let test = make_random::<Bfe<T>>();
     TestCase::new(format!("bfe_rng_{}", T::name()), test)
 }
 

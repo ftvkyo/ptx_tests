@@ -1,6 +1,5 @@
 use crate::common::{self, flush_to_zero_f32};
-use crate::cuda::Cuda;
-use crate::test::{self, RangeTest, TestCase, TestCommon};
+use crate::test::{make_range, RangeTest, TestCase, TestCommon};
 use core::f32;
 use std::mem;
 
@@ -15,7 +14,7 @@ pub(crate) fn all_tests() -> Vec<TestCase> {
 }
 
 fn cos(ftz: bool) -> TestCase {
-    let test = Box::new(move |cuda: &Cuda| test::run_range::<Cos>(cuda, Cos { ftz }));
+    let test = make_range(Cos { ftz });
     let ftz = if ftz { "_ftz" } else { "" };
     TestCase::new(format!("cos_approx{}", ftz), test)
 }
