@@ -6,6 +6,7 @@
 use std::ptr;
 
 use bpaf::Bpaf;
+use nvrtc::Nvrtc;
 use regex::{self, Regex};
 
 use cuda::Cuda;
@@ -31,6 +32,10 @@ pub enum Arguments {
         #[bpaf(short, long)]
         filter: Option<String>,
 
+        /// path to NVRTC shared library, switches to testing inline PTX embedded in CUDA sources when provided
+        #[bpaf(long)]
+        nvrtc: Option<String>,
+
         /// path to CUDA shared library under testing, for example C:\Windows\System32\nvcuda.dll or /usr/lib/x86_64-linux-gnu/libcuda.so
         #[bpaf(positional("cuda"))]
         cuda: String,
@@ -52,7 +57,7 @@ fn run(args: Arguments) -> i32 {
                 println!("{}", test.name);
             }
         }
-        Arguments::Run { filter, cuda } => {
+        Arguments::Run { filter, nvrtc, cuda } => {
             if let Some(filter) = filter {
                 let re = Regex::new(&filter).unwrap();
                 tests = tests.into_iter().filter(|t| re.is_match(&t.name)).collect();
@@ -60,6 +65,7 @@ fn run(args: Arguments) -> i32 {
 
             let ctx = TestContext {
                 cuda: Cuda::new(cuda),
+                nvrtc: nvrtc.map(Nvrtc::new),
             };
 
             unsafe { ctx.cuda.cuInit(0) }.unwrap();

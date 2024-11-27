@@ -3,11 +3,11 @@
 .reg .u64 	    positions_addr;
 .reg .u64 	    lengths_addr;
 .reg .u64 	    output_addr;
-ld.param.u64 	input_a_addr, [input_a];
-ld.param.u64 	input_b_addr, [input_b];
-ld.param.u64 	positions_addr, [positions];
-ld.param.u64 	lengths_addr, [lengths];
-ld.param.u64 	output_addr, [output];
+<LOAD_ARG> 	input_a_addr, [input_a];
+<LOAD_ARG> 	input_b_addr, [input_b];
+<LOAD_ARG> 	positions_addr, [positions];
+<LOAD_ARG> 	lengths_addr, [lengths];
+<LOAD_ARG> 	output_addr, [output];
 
 .reg .u32       tid_x;
 .reg .u64       tid_x_64;
