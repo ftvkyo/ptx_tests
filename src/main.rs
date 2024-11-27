@@ -32,6 +32,10 @@ pub enum Arguments {
         #[bpaf(short, long)]
         filter: Option<String>,
 
+        /// output extra information
+        #[bpaf(long)]
+        verbose: bool,
+
         /// path to NVRTC shared library, switches to testing inline PTX embedded in CUDA sources when provided
         #[bpaf(long)]
         nvrtc: Option<String>,
@@ -57,13 +61,14 @@ fn run(args: Arguments) -> i32 {
                 println!("{}", test.name);
             }
         }
-        Arguments::Run { filter, nvrtc, cuda } => {
+        Arguments::Run { filter, verbose, nvrtc, cuda } => {
             if let Some(filter) = filter {
                 let re = Regex::new(&filter).unwrap();
                 tests = tests.into_iter().filter(|t| re.is_match(&t.name)).collect();
             }
 
             let ctx = TestContext {
+                verbose,
                 cuda: Cuda::new(cuda),
                 nvrtc: nvrtc.map(Nvrtc::new),
             };

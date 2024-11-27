@@ -16,6 +16,8 @@ mod sin;
 mod sqrt;
 
 pub struct TestContext {
+    pub verbose: bool,
+
     pub cuda: Cuda,
     pub nvrtc: Option<Nvrtc>,
 }
@@ -89,6 +91,12 @@ impl TestContext {
                 Self::fmt_cuda_signature(args),
                 Self::ptx_to_inline(args, &body),
             );
+
+            if self.verbose {
+                for (i, line) in source_cuda.lines().enumerate() {
+                    println!("{:3} |  {}", i + 1, line);
+                }
+            }
 
             let mut program = ptr::null_mut();
             unsafe { nvrtc.nvrtcCreateProgram(&mut program, source_cuda.as_ptr() as _, ptr::null(), 0, ptr::null(), ptr::null()) }.unwrap();
