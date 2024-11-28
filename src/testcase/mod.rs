@@ -22,11 +22,21 @@ pub struct TestContext {
     pub nvrtc: Option<Nvrtc>,
 }
 
+// TODO: split into a trait with 2 implementations
 impl TestContext {
     /// Turn argument names into PTX test function signature.
     fn fmt_ptx_signature(args: &[&str]) -> String {
         let args: Vec<_> = args.iter().map(|a| format!(".param .u64 {}", a)).collect();
         format!(".entry run({})", args.join(", "))
+    }
+
+    fn fmt_ptx_params_load(args: &[&str]) -> String {
+        let mut text = String::new();
+        for arg in args {
+            text.push_str(&format!(".reg .u64    {name}_addr;\n", name = arg));
+            text.push_str(&format!("ld.param.u64 {name}_addr, [{name}];\n", name = arg));
+        }
+        text
     }
 
     /// Turn argument names into CUDA test function signature.
@@ -35,39 +45,32 @@ impl TestContext {
         format!("extern \"C\" __global__ void run({})", args.join(", "))
     }
 
+    fn fmt_cuda_inline_ptx_params_load(args: &[&str]) -> String {
+        let mut text = String::new();
+        for (arg_index, arg_name) in args.iter().enumerate() {
+            text.push_str(&format!(".reg .u64 {name}_addr;\n", name = arg_name));
+            text.push_str(&format!("mov.u64   {name}_addr, %{index};\n", name = arg_name, index = arg_index));
+        }
+        text
+    }
+
     /// Turn argument names into CUDA inline PTX parameter list.
     fn fmt_cuda_inline_ptx_params(args: &[&str]) -> String {
         args.iter().map(|a| format!(r#""l"({})"#, a)).collect::<Vec<_>>().join(", ")
-    }
-
-    fn ptx_to_standalone(body: &str) -> String {
-        let mut body = body.to_string();
-
-        // In standalone PTX, we need to load the actual values of arguments
-        body = body.replace("<LOAD_ARG>", "ld.param.u64");
-
-        body
     }
 
     /// Transform raw PTX into CUDA inline PTX function body.
     fn ptx_to_inline(args: &[&str], body: &str) -> String {
         let mut body = body.to_string();
 
-        // In inline PTX, the `asm(...)` block does `ld` for us
-        body = body.replace("<LOAD_ARG>", "mov.u64");
-
         // Escape "%" (used for things like %tid (thread id) etc.)
         body = body.replace("%", "%%");
 
-        // Substitute mentions of function arguments in raw PTX with inline PTX parameters
-        for (arg_index, arg_name) in args.iter().enumerate() {
-            // NOTE: This assumes the arguments are only used as source address operands (`[argument]`).
-            //       Otherwise this needs to be replaced with a proper regex that matches whole words.
-            let pattern = format!("[{}]", arg_name);
-
-            // NOTE: This removes the square brackets because we use `mov` instead of `ld.param` in inline PTX.
-            body = body.replace(&pattern, &format!("%{}", arg_index));
-        }
+        body = format!(
+            "{}\n{}",
+            Self::fmt_cuda_inline_ptx_params_load(args),
+            body,
+        );
 
         body = body.lines().map(|l| format!("\"{}\"\n", l)).collect::<Vec<_>>().join("    ");
 
@@ -118,10 +121,11 @@ impl TestContext {
             source_ptx
         } else {
             format!(
-                "{}\n{}\n{{\n{}\nret;\n}}\0",
+                "{}\n{}\n{{\n{}\n{}\nret;\n}}\0",
                 header,
                 Self::fmt_ptx_signature(args),
-                Self::ptx_to_standalone(&body),
+                Self::fmt_ptx_params_load(args),
+                body,
             )
         }
     }
