@@ -10,7 +10,7 @@ use nvrtc::Nvrtc;
 use regex::{self, Regex};
 
 use cuda::Cuda;
-use test::TestError;
+use test::{TestCase, TestError};
 use testcase::*;
 
 mod common;
@@ -48,53 +48,68 @@ pub enum Arguments {
 
 fn main() {
     let args = arguments().run();
-    std::process::exit(run(args));
-}
 
-fn run(args: Arguments) -> i32 {
-    let mut failures = 0;
     let mut tests = tests();
-    tests.sort_unstable_by_key(|t| t.name.clone());
+
     match args {
         Arguments::List { .. } => {
             for test in tests {
                 println!("{}", test.name);
             }
         }
-        Arguments::Run { filter, verbose, nvrtc, cuda } => {
+        Arguments::Run {
+            filter,
+            verbose,
+            nvrtc,
+            cuda
+        } => {
             if let Some(filter) = filter {
                 let re = Regex::new(&filter).unwrap();
                 tests = tests.into_iter().filter(|t| re.is_match(&t.name)).collect();
             }
 
-            let ctx = TestContext {
-                verbose,
-                cuda: Cuda::new(cuda),
-                nvrtc: nvrtc.map(Nvrtc::new),
+            let cuda = Cuda::new(cuda);
+            let nvrtc = nvrtc.map(Nvrtc::new);
+
+            let failures = if let Some(nvrtc) = nvrtc {
+                let libs = (cuda, nvrtc);
+                run(tests, TestFixture { verbose, libs })
+            } else {
+                let libs = (cuda,);
+                run(tests, TestFixture { verbose, libs })
             };
 
-            unsafe { ctx.cuda.cuInit(0) }.unwrap();
-            let mut cuda_ctx = ptr::null_mut();
-            unsafe { ctx.cuda.cuCtxCreate_v2(&mut cuda_ctx, 0, 0) }.unwrap();
+            std::process::exit(failures);
+        }
+    }
+}
 
-            for t in tests {
-                match (t.test)(&ctx) {
-                    Ok(()) => println!("{}: OK", t.name),
-                    Err(TestError::Mismatch(e)) => {
-                        println!(
-                            "{}: FAIL: Input {}, computed on GPU {}, computed on CPU {}",
-                            t.name, e.input, e.output, e.expected
-                        );
-                        failures += 1;
-                    }
-                    Err(TestError::Miscompile(name)) => {
-                        println!("{}: FAIL: Compilation mismatch", name);
-                        failures += 1;
-                    }
-                }
+fn run(tests: Vec<TestCase>, ctx: impl TestContext) -> i32 {
+    let cuda = ctx.cuda();
+
+    let mut failures = 0;
+
+    unsafe { cuda.cuInit(0) }.unwrap();
+    let mut cuda_ctx = ptr::null_mut();
+    unsafe { cuda.cuCtxCreate_v2(&mut cuda_ctx, 0, 0) }.unwrap();
+
+    for t in tests {
+        match (t.test)(&ctx) {
+            Ok(()) => println!("{}: OK", t.name),
+            Err(TestError::Mismatch(e)) => {
+                println!(
+                    "{}: FAIL: Input {}, computed on GPU {}, computed on CPU {}",
+                    t.name, e.input, e.output, e.expected
+                );
+                failures += 1;
+            }
+            Err(TestError::Miscompile(name)) => {
+                println!("{}: FAIL: Compilation mismatch", name);
+                failures += 1;
             }
         }
     }
+
     failures
 }
 
