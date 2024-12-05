@@ -117,6 +117,7 @@ impl TestContext for TestFixture<(Cuda, Nvrtc)> {
         );
 
         if self.verbose {
+            println!("Compiling this using NVRTC:");
             for (i, line) in source_cuda.lines().enumerate() {
                 println!("{:3} |  {}", i + 1, line);
             }
@@ -136,6 +137,13 @@ impl TestContext for TestFixture<(Cuda, Nvrtc)> {
 
         let source_ptx_cstr = unsafe { CStr::from_ptr(source_ptx_buffer as _) };
         let source_ptx = String::from_utf8_lossy(source_ptx_cstr.to_bytes()).to_string();
+
+        if self.verbose {
+            println!("Compiled PTX:");
+            for (i, line) in source_ptx.lines().enumerate() {
+                println!("{:3} |  {}", i + 1, line);
+            }
+        }
 
         unsafe { nvrtc.nvrtcDestroyProgram(&mut program) }.unwrap();
 
