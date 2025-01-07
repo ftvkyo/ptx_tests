@@ -17,11 +17,13 @@ mod sqrt;
 
 pub trait TestContext {
     fn cuda(&self) -> &Cuda;
+    fn is_dry(&self) -> bool;
     fn prepare_test_source(&self, ptx: &dyn TestPtx) -> Result<CString, String>;
 }
 
 pub struct TestFixture<L> {
     pub libs: L,
+    pub dry: bool,
 }
 
 const PTX_HEADER: &'_ str = "
@@ -33,6 +35,10 @@ const PTX_HEADER: &'_ str = "
 impl TestContext for TestFixture<(Cuda,)> {
     fn cuda(&self) -> &Cuda {
         &self.libs.0
+    }
+
+    fn is_dry(&self) -> bool {
+        self.dry
     }
 
     fn prepare_test_source(&self, ptx: &dyn TestPtx) -> Result<CString, String> {
@@ -65,6 +71,10 @@ impl TestContext for TestFixture<(Cuda,)> {
 impl TestContext for TestFixture<(Cuda, Nvrtc)> {
     fn cuda(&self) -> &Cuda {
         &self.libs.0
+    }
+
+    fn is_dry(&self) -> bool {
+        self.dry
     }
 
     fn prepare_test_source(&self, ptx: &dyn TestPtx) -> Result<CString, String> {

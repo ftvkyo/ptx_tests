@@ -32,6 +32,10 @@ pub enum Arguments {
         #[bpaf(short, long)]
         filter: Option<String>,
 
+        /// Perform a dry run (build the tests, but don't run them)
+        #[bpaf(long)]
+        dry: bool,
+
         /// path to NVRTC shared library, switches to testing inline PTX embedded in CUDA sources when provided
         #[bpaf(long)]
         nvrtc: Option<String>,
@@ -53,7 +57,7 @@ fn main() {
                 println!("{}", test.name);
             }
         }
-        Arguments::Run { filter, nvrtc, cuda } => {
+        Arguments::Run { filter, dry, nvrtc, cuda } => {
             if let Some(filter) = filter {
                 let re = Regex::new(&filter).unwrap();
                 tests = tests.into_iter().filter(|t| re.is_match(&t.name)).collect();
@@ -64,10 +68,10 @@ fn main() {
 
             let failures = if let Some(nvrtc) = nvrtc {
                 let libs = (cuda, nvrtc);
-                run(tests, TestFixture { libs })
+                run(tests, TestFixture { libs, dry })
             } else {
                 let libs = (cuda,);
-                run(tests, TestFixture { libs })
+                run(tests, TestFixture { libs, dry })
             };
 
             std::process::exit(failures);

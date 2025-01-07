@@ -490,6 +490,11 @@ pub fn run_random<T: RandomTest>(ctx: &dyn TestContext) -> Result<(), TestError>
     let mut kernel = ptr::null_mut();
     unsafe { cuda.cuModuleGetFunction(&mut kernel, module, c"run".as_ptr()) }.unwrap();
 
+    if ctx.is_dry() {
+        unsafe { cuda.cuModuleUnload(module) }.unwrap();
+        return Ok(());
+    }
+
     let mut rng = XorShiftRng::seed_from_u64(SEED);
     let mut free_memory = 0;
     let mut total_memory = 0;
@@ -592,6 +597,11 @@ pub fn run_range<Test: RangeTest>(ctx: &dyn TestContext, t: Test) -> Result<(), 
     let module = load_module(ctx, &t)?;
     let mut kernel = ptr::null_mut();
     unsafe { cuda.cuModuleGetFunction(&mut kernel, module, c"run".as_ptr()) }.unwrap();
+
+    if ctx.is_dry() {
+        unsafe { cuda.cuModuleUnload(module) }.unwrap();
+        return Ok(());
+    }
 
     let mut free_memory = 0;
     let mut total_memory = 0;
