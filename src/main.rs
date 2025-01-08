@@ -82,7 +82,7 @@ fn main() {
 fn run(tests: Vec<TestCase>, ctx: impl TestContext) -> i32 {
     let cuda = ctx.cuda();
 
-    let mut failures = 0;
+    let mut failures = vec![];
 
     unsafe { cuda.cuInit(0) }.unwrap();
     let mut cuda_ctx = ptr::null_mut();
@@ -92,11 +92,10 @@ fn run(tests: Vec<TestCase>, ctx: impl TestContext) -> i32 {
         use TestError::*;
 
         let result = (t.test)(&ctx);
-        if result.is_err() {
-            failures += 1;
-        }
-
         print!("{}: ", t.name);
+        if result.is_err() {
+            failures.push(t.name);
+        }
         match result {
             Ok(()) => println!("OK"),
             Err(CompilationFail { message }) => println!("FAIL - Compilation failed:\n{message}"),
@@ -107,7 +106,12 @@ fn run(tests: Vec<TestCase>, ctx: impl TestContext) -> i32 {
         }
     }
 
-    failures
+    println!("Total failures: {}", failures.len());
+    for fail in &failures {
+        println!("- {fail}");
+    }
+
+    failures.len() as i32
 }
 
 #[macro_export]
